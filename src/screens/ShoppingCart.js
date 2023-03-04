@@ -1,13 +1,18 @@
 import { View, Text, FlatList, StyleSheet, Pressable } from "react-native";
 import React from "react";
-
+import {
+  useCreateOrderMutation,
+  useCreatePaymentIntentMutation,
+} from "../store/apiSlice";
 import CartListItems from "../components/CartListItem.js";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
   selectDeliveryPrice,
   selectedSubTotal,
   selectTotalPrice,
+  cartSlice,
 } from "../store/cartSlice.js";
+import { useStripe } from "@stripe/stripe-react-native";
 
 const ShopingCartFooter = () => {
   const subtotal = useSelector(selectedSubTotal);
@@ -32,7 +37,69 @@ const ShopingCartFooter = () => {
 };
 
 const ShoppingCart = () => {
+  const subtotal = useSelector(selectedSubTotal);
+  const delivery = useSelector(selectDeliveryPrice);
+  const total = useSelector(selectTotalPrice);
   const cart = useSelector((state) => state.cart.item);
+  const dispatch = useDispatch();
+
+  const [createOrder, { data, error, isLoading }] = useCreateOrderMutation();
+  const [createPaymentIntent] = useCreatePaymentIntentMutation();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const onCheckout = async () => {
+    // 1. Create a payment intent
+    const response = await createPaymentIntent({
+      amount: Math.floor(total * 100),
+    });
+    if (response.error) {
+      alert("something went wrong!");
+      return;
+    }
+    // 2. Initialize the Payment sheet
+    const initResponse = await initPaymentSheet({
+      merchantDisplayName: "ShoeStoreX",
+      paymentIntentClientSecret: response.data.paymentIntent,
+      // defaultBillingDetails:{
+
+      // }
+    });
+    if (initResponse.error) {
+      alert("something went wrong!");
+      return;
+    }
+    // 3. Present the Payment Sheet from Stripe
+    const paymentResponse = await presentPaymentSheet();
+
+    if (paymentResponse.error) {
+      alert(
+        `Error code:${paymentResponse.error.code}`,
+        paymentResponse.error.message
+      );
+      return;
+    }
+    // 4. If payment ok -> create the order
+    onCreateOrder();
+  };
+  const onCreateOrder = async () => {
+    const order = await createOrder({
+      items: cart,
+      subtotal,
+      delivery,
+      total,
+      customer: {
+        name: "bala",
+        address: "My Home",
+        mail: "sanibalakrishna@gmail.com",
+      },
+    });
+
+    if (order.data?.status === "Ok") {
+      alert(`Order has been placed with refid:${order.data.data.ref}`);
+      dispatch(cartSlice.actions.clearCart());
+    }
+  };
+
   return (
     <>
       <FlatList
@@ -40,7 +107,7 @@ const ShoppingCart = () => {
         renderItem={({ item }) => <CartListItems cartItem={item} />}
         ListFooterComponent={ShopingCartFooter}
       />
-      <Pressable style={styles.button}>
+      <Pressable style={styles.button} onPress={onCheckout}>
         <Text style={styles.buttonText}>Check Out</Text>
       </Pressable>
     </>

@@ -6,26 +6,39 @@ import {
   FlatList,
   useWindowDimensions,
   ScrollView,
+  ActivityIndicator,
   Pressable,
 } from "react-native";
 import React from "react";
 import products from "../data/products.js";
 import { useDispatch, useSelector } from "react-redux";
 import { cartSlice } from "../store/cartSlice.js";
-const ProductDetailsScreen = () => {
-  const product = useSelector((state) => state.products.selectedProduct);
+import { useGetProductQuery } from "../store/apiSlice.js";
+
+const ProductDetailsScreen = ({ route }) => {
+  const id = route.params.id;
+  const { data, isLodaing, error } = useGetProductQuery(id);
+
   const dispatch = useDispatch();
   const { width } = useWindowDimensions();
+  if (isLodaing) {
+    return <ActivityIndicator />;
+  }
+  if (error) {
+    return <Text>Error fetching the Product.{error.error}</Text>;
+  }
 
+  const product = data?.data;
   const addToCart = () => {
     dispatch(cartSlice.actions.addCartItem({ product }));
   };
+
   return (
     <View>
       <ScrollView>
         {/* Image Coursal */}
         <FlatList
-          data={product.images}
+          data={product?.images}
           renderItem={({ item }) => (
             <Image source={{ uri: item }} style={{ width, aspectRatio: 1 }} />
           )}
@@ -36,11 +49,11 @@ const ProductDetailsScreen = () => {
 
         <View style={{ padding: 20 }}>
           {/* Title */}
-          <Text style={styles.title}>{product.name}</Text>
+          <Text style={styles.title}>{product?.name}</Text>
           {/* Price */}
-          <Text style={styles.price}>{product.price * 81.5}</Text>
+          <Text style={styles.price}>{product?.price * 81.5}</Text>
           {/* Description */}
-          <Text style={styles.description}>{product.description}</Text>
+          <Text style={styles.description}>{product?.description}</Text>
         </View>
       </ScrollView>
       <Pressable onPress={addToCart} style={styles.button}>
